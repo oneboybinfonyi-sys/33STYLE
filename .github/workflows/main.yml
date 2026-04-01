@@ -2,7 +2,7 @@ name: 33STYLE Auto Rename
 on:
   push:
     paths:
-      - 'processed_images/**' # 當資料夾有新檔案時觸發
+      - 'processed_images/**'
 
 jobs:
   build:
@@ -12,9 +12,9 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.10'
+          python-version: '3.12' # 升級 Python 版本
       - name: Install dependencies
-        run: pip install google-generativeai
+        run: pip install google-genai # 安裝最新的 Gen AI 套件
       - name: Run AI Rename
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
@@ -24,5 +24,5 @@ jobs:
           git config user.name "33STYLE-Bot"
           git config user.email "bot@33style.com"
           git add .
-          git diff --staged --quiet || git commit -m "🤖 AI 自動辨識改名完成"
+          git diff --staged --quiet || git commit -m "🤖 AI 自動辨識改名完成 (SDK v2)"
           git push
