@@ -1,4 +1,4 @@
-name: 33STYLE Auto Rename
+name: 33STYLE_Auto_Rename
 on:
   push:
     paths:
@@ -8,31 +8,30 @@ jobs:
   build:
     runs-on: ubuntu-latest
     permissions:
-      contents: write # 確保機器人有寫入權限
+      contents: write
     steps:
       - uses: actions/checkout@v4
         with:
-          fetch-depth: 0 # 獲取完整紀錄以利同步
+          fetch-depth: 0
 
-      - name: Set up Python
+      - name: Setup_Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install dependencies
+      - name: Install_New_SDK
         run: pip install google-genai
 
-      - name: Run AI Rename
+      - name: Run_AI_Process
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python process.py
 
-      - name: Commit and Push changes
+      - name: Sync_and_Push
         run: |
           git config user.name "33STYLE-Bot"
           git config user.email "bot@33style.com"
           git add .
-          # 先 pull 遠端變更並合併，解決 rejected 衝突
           git pull --rebase origin main
-          git diff --staged --quiet || git commit -m "🤖 AI 自動辨識改名 (SDK v2)"
+          git diff --staged --quiet || git commit -m "🤖 AI 自動化改名完成"
           git push origin main
