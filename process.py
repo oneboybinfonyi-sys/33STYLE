@@ -5,9 +5,9 @@ import time
 from google import genai
 from google.genai import types
 
-# --- 2026 標準初始化 ---
+# 2026 最新連線配置
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-MODEL_ID = "gemini-2.0-flash" 
+MODEL_ID = "gemini-2.0-flash" # 1.5 已失效，必須改用 2.0
 
 categories = {
     "上半身": ["掛脖背心", "馬甲背心", "細肩帶背心", "削肩背心", "短版T恤", "襯衫", "一字領上衣"],
@@ -19,9 +19,9 @@ categories = {
     "風格": ["法式優雅", "性感辣妹", "清新甜美", "商務幹練", "美式街頭", "極簡冷淡", "Y2K"]
 }
 
-# 處理照片
 for filepath in glob.glob("processed_images/*.*"):
     filename = os.path.basename(filepath)
+    # 跳過已命名好的檔案
     if filename == ".keep" or filename.count('-') >= 5:
         continue
 
@@ -46,16 +46,11 @@ for filepath in glob.glob("processed_images/*.*"):
         clean_name = re.sub(r'[^\w\s-]', '', result)
         ext = os.path.splitext(filename)[1]
         
-        new_path = f"processed_images/{clean_name}{ext}"
-        os.rename(filepath, new_path)
-        print(f"✅ 改名成功: {clean_name}")
+        os.rename(filepath, f"processed_images/{clean_name}{ext}")
+        print(f"✅ 成功改名為: {clean_name}")
 
-        # 🕒 關鍵：為了避開 429 錯誤，每張圖強制休息 30 秒
-        print("等待 30 秒避開頻率限制...")
-        time.sleep(30)
+        # 🕒 為了避開 429 錯誤，每張圖強制休息 15 秒
+        time.sleep(15)
 
     except Exception as e:
-        if "429" in str(e):
-            print("⚠️ 觸發 Google 限制，本次任務終止，請等 1 分鐘後再試。")
-            break
         print(f"❌ 錯誤: {e}")
