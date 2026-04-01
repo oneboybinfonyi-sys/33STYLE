@@ -2,8 +2,12 @@ name: 33STYLE_Auto_Rename
 
 on:
   push:
+    branches:
+      - main
     paths:
       - 'processed_images/**'
+      - 'process.py'
+      - '.github/workflows/**'
 
 jobs:
   build:
@@ -17,38 +21,46 @@ jobs:
         with:
           fetch-depth: 0
 
-      - name: 2. 設定 Python
+      - name: 2. 顯示當前檔案（debug用）
+        run: |
+          echo "📂 當前目錄："
+          pwd
+          echo "📄 檔案列表："
+          ls -R
+
+      - name: 3. 設定 Python
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: 3. 安裝 SDK
+      - name: 4. 安裝 SDK
         run: pip install google-genai
 
-      - name: 4. 執行 AI
+      - name: 5. 執行 AI（確認新版有跑）
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
-        run: python process.py
+        run: |
+          echo "🚀 準備執行 process.py"
+          python process.py
 
-      - name: 5. 強制同步並推送（終極穩定版）
+      - name: 6. 自動 commit + push（最穩版本）
         run: |
           git config user.name "33STYLE-Bot"
           git config user.email "bot@33style.com"
 
           git add .
 
-          # ✅ 先抓遠端（避免 rejected）
-          git fetch origin main
+          # 如果沒有變更就跳過（避免無限觸發）
+          if git diff --staged --quiet; then
+            echo "✅ 沒有變更，跳過 commit"
+            exit 0
+          fi
 
-          # ✅ 強制 rebase（不會產生 merge commit）
-          git rebase origin/main || true
+          git commit -m "🤖 AI 改名完成"
 
-          # ✅ 有變更才 commit
-          git diff --staged --quiet || git commit -m "🤖 AI 改名完成"
-
-          # ✅ 關鍵：如果 push 失敗 → 自動再試一次
+          # 嘗試推送（失敗就自動補救）
           git push origin main || (
-            echo "⚠️ push 失敗，重新同步後再推一次"
+            echo "⚠️ push 失敗，開始同步"
             git pull --rebase origin main
             git push origin main
           )
