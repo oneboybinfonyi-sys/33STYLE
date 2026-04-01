@@ -10,28 +10,33 @@ jobs:
     permissions:
       contents: write
     steps:
-      - uses: actions/checkout@v4
+      - name: 1. 徹底抓取雲端所有內容
+        uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0 # 必須設為 0 才能進行後續的 rebase 同步
 
-      - name: Setup_Python
+      - name: 2. 設定 Python 3.12
         uses: actions/setup-python@v5
         with:
           python-version: '3.12'
 
-      - name: Install_New_SDK
+      - name: 3. 安裝最新 SDK
         run: pip install google-genai
 
-      - name: Run_AI_Process
+      - name: 4. 執行 AI 辨識
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python process.py
 
-      - name: Sync_and_Push
+      - name: 5. 解決對撞並強制存檔 (正解在這裡)
         run: |
           git config user.name "33STYLE-Bot"
           git config user.email "bot@33style.com"
           git add .
+          
+          # 核心指令：先拉取遠端變更並合併，這能解決 rejected 錯誤
           git pull --rebase origin main
-          git diff --staged --quiet || git commit -m "🤖 AI 自動化改名完成"
+          
+          # 如果有變動才存檔，沒變動就跳過，避免無限循環
+          git diff --staged --quiet || git commit -m "🤖 AI 改名完成 (同步雲端)"
           git push origin main
