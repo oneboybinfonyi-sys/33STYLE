@@ -1,87 +1,54 @@
 import os
 import glob
 import re
-import time
-import random
-import mimetypes
-from google import genai
-from google.genai import types
+from PIL import Image
+import numpy as np
 
-print("🔥 NEW VERSION RUNNING 🔥")
-
-# === 基本設定 ===
-client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
-MODEL_ID = "gemini-2.0-flash"
-
-MAX_RETRY = 3
-
-categories = {
-    "上半身": ["掛脖背心", "馬甲背心", "細肩帶背心", "削肩背心", "短版T恤", "襯衫", "一字領上衣"],
-    "下半身": ["熱褲", "高腰長褲", "百褶裙", "包臀裙", "牛仔長裙", "工裝褲", "瑜珈褲"],
-    "連身裙": ["短版連身裙", "膝上連身裙", "過膝連身裙"],
-    "外搭": ["西裝外套", "針織開衫", "牛仔夾克", "透膚襯衫", "皮衣"],
-    "襪類": ["透膚黑絲", "白色長襪", "網襪", "膝上襪", "隱形襪"],
-    "鞋類": ["細高跟鞋", "老爹鞋", "瑪莉珍鞋", "膝上靴", "帆布鞋", "涼鞋"],
-    "風格": ["法式優雅", "性感辣妹", "清新甜美", "商務幹練", "美式街頭", "極簡冷淡", "Y2K"]
-}
+print("🔥 FREE MODE RUNNING (NO API) 🔥")
 
 
-def safe_generate(prompt, image_part):
-    """帶 retry + quota 保護"""
-    for attempt in range(MAX_RETRY):
-        try:
-            response = client.models.generate_content(
-                model=MODEL_ID,
-                contents=[
-                    types.Content(
-                        role="user",
-                        parts=[
-                            types.Part.from_text(text=prompt),
-                            image_part
-                        ]
-                    )
-                ],
-                config=types.GenerateContentConfig(
-                    temperature=0.1
-                )
-            )
+def analyze_image_style(image_path):
+    """用顏色判斷風格（簡易版 AI）"""
+    img = Image.open(image_path).convert("RGB")
+    img = img.resize((100, 100))
 
-            if not response or not response.text:
-                raise Exception("AI 回應為空")
+    arr = np.array(img)
+    avg_color = arr.mean(axis=(0, 1))  # RGB 平均
 
-            return response.text.strip()
+    r, g, b = avg_color
 
-        except Exception as e:
-            error_msg = str(e)
-
-            # 🚨 quota 用完 → 直接跳過（核心修正）
-            if "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg:
-                print("🚫 API 配額用完，跳過")
-                return None
-
-            print(f"⚠️ 第 {attempt+1} 次失敗: {e}")
-
-            if attempt < MAX_RETRY - 1:
-                sleep_time = random.randint(5, 15)
-                print(f"⏳ 等待 {sleep_time} 秒後重試...")
-                time.sleep(sleep_time)
-            else:
-                return None
+    # 👉 簡單規則判斷風格
+    if r > 180 and g > 180 and b > 180:
+        return "極簡冷淡"
+    elif r > 180 and g > 150:
+        return "清新甜美"
+    elif r > 150 and b < 100:
+        return "性感辣妹"
+    elif g > 150:
+        return "自然清新"
+    elif b > 150:
+        return "冷色系"
+    else:
+        return "日常穿搭"
 
 
-def get_unique_path(base_path):
-    """避免檔名重複"""
-    if not os.path.exists(base_path):
-        return base_path
+def generate_name(style):
+    """生成檔名"""
+    return f"無-無-無-無-無-無_{style}"
 
-    name, ext = os.path.splitext(base_path)
-    counter = 1
+
+def get_unique_path(path):
+    if not os.path.exists(path):
+        return path
+
+    name, ext = os.path.splitext(path)
+    i = 1
 
     while True:
-        new_path = f"{name}_{counter}{ext}"
+        new_path = f"{name}_{i}{ext}"
         if not os.path.exists(new_path):
             return new_path
-        counter += 1
+        i += 1
 
 
 for filepath in glob.glob("processed_images/*.*"):
@@ -93,44 +60,10 @@ for filepath in glob.glob("processed_images/*.*"):
     try:
         print(f"🔍 分析中: {filename}")
 
-        with open(filepath, "rb") as f:
-            img_data = f.read()
+        style = analyze_image_style(filepath)
+        new_name = generate_name(style)
 
-        mime_type = mimetypes.guess_type(filepath)[0] or "image/jpeg"
-
-        image_part = types.Part.from_bytes(
-            data=img_data,
-            mime_type=mime_type
-        )
-
-        prompt = f"""
-辨識穿搭並回傳格式：
-[上身]-[下身]-[連身裙]-[外搭]-[襪]-[鞋]_[風格]
-
-限制：
-- 必須從字典選
-- 沒有就填 無
-- 僅回傳字串
-
-字典：
-{categories}
-"""
-
-        # 🚀 AI 呼叫
-        result = safe_generate(prompt, image_part)
-
-        # ❗ quota or fail → 跳過
-        if not result:
-            print(f"⏭️ 跳過: {filename}")
-            continue
-
-        result = result.replace(" ", "")
-
-        clean_name = re.sub(r'[\\/:*?"<>|]', '', result)
-
-        if not clean_name:
-            print(f"⚠️ 無效名稱，跳過: {filename}")
-            continue
+        clean_name = re.sub(r'[\\/:*?"<>|]', '', new_name)
 
         ext = os.path.splitext(filename)[1]
         new_path = f"processed_images/{clean_name}{ext}"
@@ -140,11 +73,6 @@ for filepath in glob.glob("processed_images/*.*"):
         os.rename(filepath, new_path)
 
         print(f"✅ 改名成功: {os.path.basename(new_path)}")
-
-        # 💤 防 429
-        sleep_time = random.randint(8, 18)
-        print(f"⏳ 冷卻 {sleep_time} 秒")
-        time.sleep(sleep_time)
 
     except Exception as e:
         print(f"❌ 錯誤: {filename} - {e}")
