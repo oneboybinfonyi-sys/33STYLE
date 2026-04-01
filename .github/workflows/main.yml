@@ -7,22 +7,32 @@ on:
 jobs:
   build:
     runs-on: ubuntu-latest
+    permissions:
+      contents: write # 確保有寫入權限
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0 # 獲取完整紀錄以利 rebase
+
       - name: Set up Python
         uses: actions/setup-python@v5
         with:
-          python-version: '3.12' # 升級 Python 版本
+          python-version: '3.12'
+
       - name: Install dependencies
-        run: pip install google-genai # 安裝最新的 Gen AI 套件
+        run: pip install google-genai
+
       - name: Run AI Rename
         env:
           GEMINI_API_KEY: ${{ secrets.GEMINI_API_KEY }}
         run: python process.py
-      - name: Commit changes
+
+      - name: Commit and Push changes
         run: |
           git config user.name "33STYLE-Bot"
           git config user.email "bot@33style.com"
           git add .
-          git diff --staged --quiet || git commit -m "🤖 AI 自動辨識改名完成 (SDK v2)"
-          git push
+          # 先 pull 遠端變更，避免 rejected
+          git pull --rebase origin main
+          git diff --staged --quiet || git commit -m "🤖 AI 自動辨識改名 (SDK v2)"
+          git push origin main
