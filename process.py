@@ -7,11 +7,12 @@ import mimetypes
 from google import genai
 from google.genai import types
 
+print("🔥 NEW VERSION RUNNING 🔥")
+
 # === 基本設定 ===
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 MODEL_ID = "gemini-2.0-flash"
 
-# 最大重試次數
 MAX_RETRY = 3
 
 categories = {
@@ -24,8 +25,9 @@ categories = {
     "風格": ["法式優雅", "性感辣妹", "清新甜美", "商務幹練", "美式街頭", "極簡冷淡", "Y2K"]
 }
 
+
 def safe_generate(prompt, image_part):
-    """帶重試的 AI 呼叫"""
+    """帶 retry + quota 保護"""
     for attempt in range(MAX_RETRY):
         try:
             response = client.models.generate_content(
@@ -50,6 +52,13 @@ def safe_generate(prompt, image_part):
             return response.text.strip()
 
         except Exception as e:
+            error_msg = str(e)
+
+            # 🚨 quota 用完 → 直接跳過（核心修正）
+            if "RESOURCE_EXHAUSTED" in error_msg or "quota" in error_msg:
+                print("🚫 API 配額用完，跳過")
+                return None
+
             print(f"⚠️ 第 {attempt+1} 次失敗: {e}")
 
             if attempt < MAX_RETRY - 1:
@@ -57,7 +66,7 @@ def safe_generate(prompt, image_part):
                 print(f"⏳ 等待 {sleep_time} 秒後重試...")
                 time.sleep(sleep_time)
             else:
-                raise e
+                return None
 
 
 def get_unique_path(base_path):
@@ -78,7 +87,6 @@ def get_unique_path(base_path):
 for filepath in glob.glob("processed_images/*.*"):
     filename = os.path.basename(filepath)
 
-    # 跳過已處理
     if filename == ".keep" or filename.count('-') >= 5:
         continue
 
@@ -88,7 +96,6 @@ for filepath in glob.glob("processed_images/*.*"):
         with open(filepath, "rb") as f:
             img_data = f.read()
 
-        # 自動判斷圖片格式
         mime_type = mimetypes.guess_type(filepath)[0] or "image/jpeg"
 
         image_part = types.Part.from_bytes(
@@ -109,28 +116,32 @@ for filepath in glob.glob("processed_images/*.*"):
 {categories}
 """
 
-        # 🚀 呼叫 AI（含重試）
+        # 🚀 AI 呼叫
         result = safe_generate(prompt, image_part)
+
+        # ❗ quota or fail → 跳過
+        if not result:
+            print(f"⏭️ 跳過: {filename}")
+            continue
 
         result = result.replace(" ", "")
 
-        # 清理非法字元
         clean_name = re.sub(r'[\\/:*?"<>|]', '', result)
 
         if not clean_name:
-            raise Exception("檔名為空")
+            print(f"⚠️ 無效名稱，跳過: {filename}")
+            continue
 
         ext = os.path.splitext(filename)[1]
         new_path = f"processed_images/{clean_name}{ext}"
 
-        # 🚫 防撞名
         new_path = get_unique_path(new_path)
 
         os.rename(filepath, new_path)
 
         print(f"✅ 改名成功: {os.path.basename(new_path)}")
 
-        # 💤 防 429（隨機間隔）
+        # 💤 防 429
         sleep_time = random.randint(8, 18)
         print(f"⏳ 冷卻 {sleep_time} 秒")
         time.sleep(sleep_time)
