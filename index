@@ -1,0 +1,88 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Midnight Luxury | 資產庫</title>
+    <style>
+        body { background: #0a0a0a; color: #d4af37; font-family: 'Helvetica Neue', sans-serif; margin: 0; padding: 20px; text-align: center; }
+        h1 { font-weight: 300; letter-spacing: 2px; margin-bottom: 30px; }
+        .grid { display: flex; flex-wrap: wrap; justify-content: center; gap: 20px; max-width: 1200px; margin: auto; }
+        .card { background: #151515; border: 1px solid #2a2a2a; border-radius: 6px; padding: 15px; width: 240px; transition: transform 0.3s; }
+        .card:hover { transform: translateY(-5px); border-color: #d4af37; }
+        img { width: 100%; height: 300px; object-fit: cover; border-radius: 4px; }
+        .tags { font-size: 12px; color: #888; margin: 15px 0; line-height: 1.6; word-break: break-all; }
+        button { background: transparent; color: #d4af37; border: 1px solid #d4af37; padding: 8px 15px; border-radius: 20px; cursor: pointer; font-size: 12px; transition: all 0.3s; }
+        button:hover { background: #d4af37; color: #0a0a0a; }
+        #status { margin-bottom: 20px; font-size: 14px; color: #aaa; }
+    </style>
+</head>
+<body>
+
+    <h1>MIDNIGHT LUXURY CLOSET</h1>
+    <div id="status">載入中...</div>
+    <div id="gallery" class="grid"></div>
+
+    <script>
+        let wardrobeData = [];
+
+        // 讀取 JSON 資料
+        fetch('data.json')
+            .then(res => res.json())
+            .then(data => {
+                wardrobeData = data;
+                renderGallery(wardrobeData);
+                document.getElementById('status').innerText = `共 ${data.length} 件單品`;
+            })
+            .catch(err => document.getElementById('status').innerText = '尚無資料，請先上傳照片並等待 AI 處理完成');
+
+        // 渲染畫面
+        function renderGallery(data) {
+            const gallery = document.getElementById('gallery');
+            gallery.innerHTML = data.map(item => `
+                <div class="card">
+                    <img src="${item.url}" loading="lazy">
+                    <div class="tags">${item.tags.replace(/-/g, ' • ')}</div>
+                    <button onclick="findSimilar('${item.tags}')">尋找相似款</button>
+                </div>
+            `).join('');
+        }
+
+        // 尋找相似款邏輯 (Levenshtein Distance)
+        function findSimilar(targetTags) {
+            document.getElementById('status').innerText = '正在為您過濾關聯單品...';
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+            
+            // 抓取 13 段細項進行比對
+            const targetDetails = targetTags.split('_')[1] || targetTags;
+
+            const results = wardrobeData.map(item => {
+                const itemDetails = item.tags.split('_')[1] || item.tags;
+                const score = calculateSimilarity(targetDetails, itemDetails);
+                return { ...item, score: score };
+            });
+
+            // 排序並渲染 (分數越高越相似)
+            results.sort((a, b) => b.score - a.score);
+            renderGallery(results);
+        }
+
+        // 字串距離計算演算法
+        function calculateSimilarity(a, b) {
+            if(!a || !b) return -99;
+            const matrix = Array.from({ length: b.length + 1 }, (_, i) => [i]);
+            for (let j = 0; j <= a.length; j++) matrix[0][j] = j;
+            for (let i = 1; i <= b.length; i++) {
+                for (let j = 1; j <= a.length; j++) {
+                    if (b.charAt(i - 1) === a.charAt(j - 1)) {
+                        matrix[i][j] = matrix[i - 1][j - 1];
+                    } else {
+                        matrix[i][j] = Math.min(matrix[i - 1][j - 1] + 1, Math.min(matrix[i][j - 1] + 1, matrix[i - 1][j] + 1));
+                    }
+                }
+            }
+            return -matrix[b.length][a.length];
+        }
+    </script>
+</body>
+</html>
