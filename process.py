@@ -1,10 +1,11 @@
 import os
 import glob
 import re
+import time  # 導入時間模組
 from google import genai
 from google.genai import types
 
-# --- 1. 初始化最新 SDK (2026 標準) ---
+# --- 1. 初始化最新 SDK ---
 client = genai.Client(api_key=os.environ.get("GEMINI_API_KEY"))
 MODEL_ID = "gemini-2.0-flash" 
 
@@ -18,23 +19,31 @@ categories = {
     "風格": ["法式優雅", "性感辣妹", "清新甜美", "商務幹練", "美式街頭", "極簡冷淡", "Y2K"]
 }
 
-# 關閉安全過濾器，確保穿搭辨識不被阻擋
-safety_settings = [
-    types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
-    types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
-    types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
-    types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
-]
+# 設定安全等級與生成配置
+config = types.GenerateContentConfig(
+    safety_settings=[
+        types.SafetySetting(category="HARM_CATEGORY_HARASSMENT", threshold="BLOCK_NONE"),
+        types.SafetySetting(category="HARM_CATEGORY_HATE_SPEECH", threshold="BLOCK_NONE"),
+        types.SafetySetting(category="HARM_CATEGORY_SEXUALLY_EXPLICIT", threshold="BLOCK_NONE"),
+        types.SafetySetting(category="HARM_CATEGORY_DANGEROUS_CONTENT", threshold="BLOCK_NONE"),
+    ],
+    temperature=0.1
+)
 
 # --- 2. 處理照片 ---
-for filepath in glob.glob("processed_images/*.*"):
+image_files = glob.glob("processed_images/*.*")
+print(f"找到 {len(image_files)} 個檔案，準備開始處理...")
+
+for filepath in image_files:
     filename = os.path.basename(filepath)
-    # 跳過已命名好的檔案 (判斷是否有底線或連字號數量)
+    
+    # 跳過已命名好的檔案或隱藏檔
     if filename == ".keep" or filename.count('-') >= 5:
         continue
 
     try:
-        # 讀取檔案
+        print(f"正在辨識: {filename}...")
+        
         with open(filepath, "rb") as f:
             img_data = f.read()
         
@@ -45,22 +54,22 @@ for filepath in glob.glob("processed_images/*.*"):
         response = client.models.generate_content(
             model=MODEL_ID,
             contents=[prompt, image],
-            config=types.GenerateContentConfig(
-                safety_settings=safety_settings,
-                temperature=0.1
-            )
+            config=config
         )
         
         result = response.text.strip().replace(" ", "")
-        # 移除可能導致檔名報錯的字元
         clean_name = re.sub(r'[^\w\s-]', '', result)
         ext = os.path.splitext(filename)[1]
         
         new_path = f"processed_images/{clean_name}{ext}"
-        
-        # 重新命名
         os.rename(filepath, new_path)
         print(f"✅ 成功: {filename} -> {clean_name}{ext}")
 
+        # --- 🕒 核心修正：每張照片處理完後休息 10 秒，避免觸發 429 錯誤 ---
+        print("等待 10 秒以符合免費版頻率限制...")
+        time.sleep(10)
+
     except Exception as e:
         print(f"❌ 錯誤: {filename} - {e}")
+        # 即使報錯也休息一下，避免連續撞牆
+        time.sleep(5)
